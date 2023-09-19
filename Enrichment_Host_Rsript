@@ -1,0 +1,157 @@
+# Load
+library("tagcloud")
+library("RColorBrewer")
+library(Rgraphviz)
+library(topGO)
+library(ggplot2)
+library(digest)
+library(tidyverse)
+
+
+setwd("C:/Users/juhartke/DATA/PROTEOMICS/Analysis/Ant_Enrichment_NewUniverse")
+
+#### Read background file for T. nylanderi (Interproscan run on complete Transcriptome)
+universe <- readMappings("../../NewUniverse_AntProteome_WQ.tsv") # "adjust the filename you want to use as background.
+# generate a simple list of the GENE IDs
+universe_genelist <- names(universe)
+
+
+######################################################################################################################
+####    Enriched in Tnyl Infected vs nestmates
+######################################################################################################################
+
+
+filename1 = "../../KEGG/Tom/F6_enriched_ICinf_comparedtoICnon.ID.txt" # adjust the filename you want to analyze
+enrichment1 <- readLines(filename1)
+
+gene_list1 <- factor(as.integer(universe_genelist %in% enrichment1))
+names(gene_list1) <- universe_genelist
+ontology_type = "BP" # or CC or MF
+GO_data1 <- new("topGOdata", description="GO_Enrichment", ontology=ontology_type, allGenes=gene_list1, annot = annFUN.gene2GO, gene2GO=universe)
+numSigGenes(GO_data1)
+sig_genes1 <- sigGenes(GO_data1)
+result_topGO1 <- runTest(GO_data1, algorithm = "weight01", statistic = "fisher")
+result_table1 <- GenTable(GO_data1, Fisher = result_topGO1, orderBy = "Fisher", ranksOf = "Fisher", topNodes = numSigGenes(GO_data1))
+#write.table(result_table1, file=paste0("topGO_result_", filename, "_", ontology_type, ".txt", sep=""), sep="\t", quote=FALSE)
+write.table(sig_genes1, file=paste0("topGO_result_","F6_enriched_ICinf_comparedtoICnon", "_", ontology_type, "GeneIDs.txt", sep=""), sep="\t", quote=FALSE)
+
+######################################################################################################################
+####    Enriched in Tnyl Infected vs healthy
+######################################################################################################################
+
+filename2 = "../../KEGG/Tom/F8_enriched_ICinf_comparedtoNCnon.ID.txt" # adjust the filename you want to analyze
+enrichment2 <- readLines(filename2)
+
+gene_list2 <- factor(as.integer(universe_genelist %in% enrichment2))
+names(gene_list2) <- universe_genelist
+ontology_type = "BP" # or CC or MF
+GO_data2 <- new("topGOdata", description="GO_Enrichment", ontology=ontology_type, allGenes=gene_list2, annot = annFUN.gene2GO, gene2GO=universe)
+sig_genes2 <- sigGenes(GO_data2)
+result_topGO2 <- runTest(GO_data2, algorithm = "weight01", statistic = "fisher")
+result_table2 <- GenTable(GO_data2, Fisher = result_topGO2, orderBy = "Fisher", ranksOf = "Fisher", topNodes = numSigGenes(GO_data2))
+#write.table(result_table2, file=paste0("topGO_result_", filename, "_", ontology_type, ".txt", sep=""), sep="\t", quote=FALSE)
+write.table(sig_genes2, file=paste0("topGO_result_", "F8_enriched_ICinf_comparedtoNCnon", "_", ontology_type, "GeneIDs.txt", sep=""), sep="\t", quote=FALSE)
+
+
+##### Word cloud with ALL ICinf enriched proteins (merged the 2 tables)
+infall <- rbind(result_table1, result_table2)
+infall$Fisher<-as.numeric(infall$Fisher)
+#write.table(infall, file=paste0("topGO_result_merge", "ICinf", "_", ontology_type, "GeneIDs.txt", sep=""), sep="\t", quote=FALSE)
+
+#enriched: all infected
+sig_enr_inf<-infall[which(infall$Fisher<0.05),]
+sig_enr_inf_u <- sig_enr_inf %>% distinct(GO.ID, .keep_all = TRUE)
+colors <- colorRampPalette( brewer.pal( 8, "Dark2" ) )( length(sig_enr_inf_u$Term))
+tagcloud(strmultline(sig_enr_inf_u$Term), weights = -log(as.numeric(sig_enr_inf_u$Fisher)),col=colors)
+
+
+######################################################################################################################
+####    Enriched in Tnyl Nestmates vs infected
+######################################################################################################################
+
+filename3 = "../../KEGG/Tom/F5_enriched_ICnon_comparedtoICinf.ID.txt" # adjust the filename you want to analyze
+enrichment3 <- readLines(filename3)
+
+gene_list3 <- factor(as.integer(universe_genelist %in% enrichment3))
+names(gene_list3) <- universe_genelist
+ontology_type = "BP" # or CC or MF
+GO_data3 <- new("topGOdata", description="GO_Enrichment", ontology=ontology_type, allGenes=gene_list3, annot = annFUN.gene2GO, gene2GO=universe)
+sig_genes3 <- sigGenes(GO_data3)
+result_topGO3 <- runTest(GO_data3, algorithm = "weight01", statistic = "fisher")
+result_table3 <- GenTable(GO_data3, Fisher = result_topGO3, orderBy = "Fisher", ranksOf = "Fisher", topNodes = numSigGenes(GO_data3))
+#write.table(result_table3, file=paste0("topGO_result_", filename, "_", ontology_type, ".txt", sep=""), sep="\t", quote=FALSE)
+write.table(sig_genes3, file=paste0("topGO_result_", "F5_enriched_ICnon_comparedtoICinf", "_", ontology_type, "GeneIDs.txt", sep=""), sep="\t", quote=FALSE)
+
+
+######################################################################################################################
+####    Enriched in Tnyl Nestmates vs healthy
+######################################################################################################################
+
+filename4 = "../../KEGG/Tom/F11_enriched_ICnon_comparedtoNCnon.ID.txt" # adjust the filename you want to analyze
+enrichment4 <- readLines(filename4)
+
+gene_list4 <- factor(as.integer(universe_genelist %in% enrichment4))
+names(gene_list4) <- universe_genelist
+ontology_type = "BP" # or CC or MF
+GO_data4 <- new("topGOdata", description="GO_Enrichment", ontology=ontology_type, allGenes=gene_list4, annot = annFUN.gene2GO, gene2GO=universe)
+sig_genes4 <- sigGenes(GO_data4)
+result_topGO4 <- runTest(GO_data4, algorithm = "weight01", statistic = "fisher")
+result_table4 <- GenTable(GO_data4, Fisher = result_topGO4, orderBy = "Fisher", ranksOf = "Fisher", topNodes = numSigGenes(GO_data4))
+#write.table(result_table4, file=paste0("topGO_result_", filename4, "_", ontology_type, ".txt", sep=""), sep="\t", quote=FALSE)
+write.table(sig_genes4, file=paste0("topGO_result_", "F11_enriched_ICnon_comparedtoNCnon", "_", ontology_type, "GeneIDs.txt", sep=""), sep="\t", quote=FALSE)
+
+
+##### Word cloud with ALL ICnon enriched proteins (merged the 2 tables)
+nmall <- rbind(result_table3, result_table4)
+nmall$Fisher<-as.numeric(nmall$Fisher)
+sig_enr_nm<-nmall[which(nmall$Fisher<0.05),]
+sig_enr_nm_u <- sig_enr_nm %>% distinct(GO.ID, .keep_all = TRUE)
+colors <- colorRampPalette( brewer.pal( 8, "Dark2"))(length(sig_enr_nm_u$Term))
+tagcloud(strmultline(sig_enr_nm_u$Term), weights = -log(as.numeric(sig_enr_nm_u$Fisher)),col=colors)
+
+
+######################################################################################################################
+####    Enriched in Tnyl Healthy vs infected
+######################################################################################################################
+
+filename5 = "../../KEGG/Tom/F9_enriched_NCnon_comparedtoICinf.ID.txt" # adjust the filename you want to analyze
+enrichment5 <- readLines(filename5)
+
+gene_list5 <- factor(as.integer(universe_genelist %in% enrichment5))
+names(gene_list5) <- universe_genelist
+ontology_type = "BP" # or CC or MF
+GO_data5 <- new("topGOdata", description="GO_Enrichment", ontology=ontology_type, allGenes=gene_list5, annot = annFUN.gene2GO, gene2GO=universe)
+sig_genes5 <- sigGenes(GO_data5)
+result_topGO5 <- runTest(GO_data5, algorithm = "weight01", statistic = "fisher")
+result_table5 <- GenTable(GO_data5, Fisher = result_topGO5, orderBy = "Fisher", ranksOf = "Fisher", topNodes = numSigGenes(GO_data5))
+#write.table(result_table5, file=paste0("topGO_result_", filename5, "_", ontology_type, ".txt", sep=""), sep="\t", quote=FALSE)
+write.table(sig_genes5, file=paste0("topGO_result_", "F9_enriched_NCnon_comparedtoICinf", "_", ontology_type, "GeneIDs.txt", sep=""), sep="\t", quote=FALSE)
+
+
+######################################################################################################################
+####    Enriched in Tnyl Healthy vs nestmates
+######################################################################################################################
+
+filename6 = "../../KEGG/Tom/F12_enriched_NCnon_comparedtoICnon.ID.txt" # adjust the filename you want to analyze
+enrichment6 <- readLines(filename6)
+
+gene_list6 <- factor(as.integer(universe_genelist %in% enrichment6))
+names(gene_list6) <- universe_genelist
+ontology_type = "BP" # or CC or MF
+GO_data6 <- new("topGOdata", description="GO_Enrichment", ontology=ontology_type, allGenes=gene_list6, annot = annFUN.gene2GO, gene2GO=universe)
+sig_genes6 <- sigGenes(GO_data6)
+result_topGO6 <- runTest(GO_data6, algorithm = "weight01", statistic = "fisher")
+result_table6 <- GenTable(GO_data6, Fisher = result_topGO6, orderBy = "Fisher", ranksOf = "Fisher", topNodes = numSigGenes(GO_data6))
+#write.table(result_table6, file=paste0("topGO_result_", filename6, "_", ontology_type, ".txt", sep=""), sep="\t", quote=FALSE)
+names(result_table6)[6]<-"Fisher"
+write.table(sig_genes6, file=paste0("topGO_result_", "F12_enriched_NCnon_comparedtoICnon", "_", ontology_type, "GeneIDs.txt", sep=""), sep="\t", quote=FALSE)
+
+##### Word cloud with ALL NCnon enriched proteins (merged the 2 tables)
+hall <- rbind(result_table5, result_table6)
+hall$Fisher<-as.numeric(hall$Fisher)
+sig_enr_h<-hall[which(hall$Fisher<0.05),]
+sig_enr_h_u <- sig_enr_h %>% distinct(GO.ID, .keep_all = TRUE)
+colors <- colorRampPalette( brewer.pal( 8, "Dark2"))(length(sig_enr_h_u$Term))
+tagcloud(strmultline(sig_enr_h_u$Term), weights = -log(as.numeric(sig_enr_h_u$Fisher)),col=colors)
+
+
