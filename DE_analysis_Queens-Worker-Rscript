@@ -1,0 +1,473 @@
+library(ggplot2)
+library(tidyr)
+library(stringr)
+library(RCurl)
+library(dplyr)
+
+
+######################################################
+
+##   Comparison Healthy Queens <-> Healthy workers
+
+######################################################
+
+hQhW <- read.delim("RelAbundance_hQ-hW_anno.txt", h=T, sep="\t")
+summary(hQhW)
+
+dimnames(hQhW)[[1]] <- hQhW[,1]
+hQhW = hQhW[,-1]
+colnames(hQhW)
+
+t.test(hQhW[1,2:5], hQhW[1,6:9])
+y <- t.test(hQhW[2,2:5], hQhW[2,6:9])
+
+dim(hQhW)
+ttesthQhW <- function(df, grp1, grp2) {
+  x = df[grp1]
+  y = df[grp2]
+  x = as.numeric(x)
+  y = as.numeric(y)  
+  results = t.test(x, y)
+  results$p.value
+}
+rawpvalue = apply(hQhW, 1, ttesthQhW, grp1 = c(2:5), grp2 = c(6:9))
+
+hist(rawpvalue)
+
+##transform data into log2 base.
+hQhW2 = log2(hQhW[2:9])
+
+#calculate the mean of each gene per hemolymph sample
+hW = apply(hQhW2[,1:4], 1, mean)
+
+#calcuate the mean of each gene per whole cestode sample
+hQ = apply(hQhW2[,5:8], 1, mean) 
+
+#confirming numeric vector
+class(hW) 
+class(hQ)
+
+foldchange <- hW - hQ 
+
+#Plot a histogram of the fold change values.
+hist(foldchange, xlab = "log2 Fold Change (hW vs hQ)")
+
+#create results table, add rownames as gene ID, add gene names
+results = cbind(foldchange, rawpvalue)
+results = as.data.frame(results)
+results$geneID <- rownames(results)
+results$rawpvalue <- -1*log10(rawpvalue)
+results$Name <- hQhW$Name
+
+##### prepare table for volcano plot 
+results <- results %>%  
+  mutate(significant_in = case_when(foldchange >= 1 & rawpvalue >= 1.1 ~ "hW", 
+                               foldchange <= -1 & rawpvalue >= 1.1 ~ "hQ", 
+                               TRUE ~ "ns")) 
+results %>%
+  count(significant_in)
+write.table(results, file=paste0("Comparison_hQ-hW_forVolcanoPlot_DEPanalysis.txt", sep=""), sep="\t", quote=FALSE)
+
+# set parameters for the volcano plot -> sizes, alpha and colours for circles
+cols <- c("hQ" = "goldenrod3", "hW" = "chartreuse4", "ns" = "grey")
+sizes <- c("hW" = 2, "hQ" = 2, "ns" = 1) 
+alphas <- c("hW" = 1, "hQ" = 1, "ns" = 0.5)
+
+#Volcano plot -> colors correspond to which sample the protein was found in
+ggplot(data=results, aes(x=foldchange, y=rawpvalue, fill=significant_in, size = significant_in, 
+                         alpha = significant_in, label=Name)) +  
+  geom_point(shape=21, colour="black") +
+  geom_vline(xintercept=c(-1,1),lty=4,col="black",lwd=0.8) +
+  geom_hline(yintercept = 1.1,lty=4,col="black",lwd=0.8) +
+  scale_fill_manual(values = cols) + # Modify point colour  
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  xlim(c(-7, 9)) +
+  labs(x="log2(fold change)", y="-log10 (p-value)", title="Differential protein abundance: Healthy queens - healthy workers")  +
+  theme_bw()+
+  theme(axis.title = element_text(size = 14), 
+        legend.position="right",
+        legend.title =  element_text(size=14),
+        legend.text = element_text(size=14),
+        axis.text=element_text(size=14)) +
+  labs(fill = "protein from ...") +
+  geom_text(aes(label=ifelse(significant_in=="hQ",as.character(Name),'')),hjust=0,vjust=0, size=3.2) #+
+  geom_text(aes(label=ifelse(significant_in=="hW",as.character(Name),'')),hjust=0,vjust=0, size=3)
+  
+
+ggsave(plot=last_plot(), device='pdf', dpi=600, filename="Comparison_hQ-hW_DEP_volcano.pdf")
+
+
+
+######################################################
+
+##   Comparison Nestmate Queens <-> Nestmate workers
+
+######################################################
+
+
+setwd("C:/Users/juhartke/DATA/PROTEOMICS/Analysis/Queen_comparison/Comparison_nmQueen_nmW/")
+nmQnmW <- read.delim("RelAbundance_nmQ-nmW_anno.txt", h=T, sep="\t")
+summary(nmQnmW)
+
+dimnames(nmQnmW)[[1]] <- nmQnmW[,1]
+nmQnmW = nmQnmW[,-1]
+colnames(nmQnmW)
+
+t.test(nmQnmW[1,2:5], nmQnmW[1,6:9])
+y <- t.test(nmQnmW[2,2:5], nmQnmW[2,6:9])
+
+dim(nmQnmW)
+ttestnmQnmW<- function(df, grp1, grp2) {
+  x = df[grp1]
+  y = df[grp2]
+  x = as.numeric(x)
+  y = as.numeric(y)  
+  results = t.test(x, y)
+  results$p.value
+}
+rawpvalue = apply(nmQnmW, 1, ttestnmQnmW, grp1 = c(2:5), grp2 = c(6:9))
+
+hist(rawpvalue)
+
+##transform data into log2 base.
+nmQnmW2 = log2(nmQnmW[2:9])
+
+#calculate the mean of each gene per hemolymph sample
+nmW = apply(nmQnmW2[,1:4], 1, mean)
+
+#calcuate the mean of each gene per whole cestode sample
+nmQ = apply(nmQnmW2[,5:8], 1, mean) 
+
+#confirming numeric vector
+class(nmW) 
+class(nmQ)
+
+foldchange <- nmW - nmQ 
+
+#Plot a histogram of the fold change values.
+hist(foldchange, xlab = "log2 Fold Change (nmW vs nmQ)")
+
+#create results table, add rownames as gene ID, add gene names
+results = cbind(foldchange, rawpvalue)
+results = as.data.frame(results)
+results$geneID <- rownames(results)
+results$rawpvalue <- -1*log10(rawpvalue)
+results$Name <- nmQnmW$Name
+
+##### prepare table for volcano plot 
+results <- results %>%  
+  mutate(significant_in = case_when(foldchange >= 1 & rawpvalue >= 1.1 ~ "nmW", 
+                                    foldchange <= -1 & rawpvalue >= 1.1 ~ "nmQ", 
+                                    TRUE ~ "ns")) 
+results %>%
+  count(significant_in)
+write.table(results, file=paste0("Comparison_nmQ-nmW_forVolcanoPlot_DEPanalysis.txt", sep=""), sep="\t", quote=FALSE)
+
+# set parameters for the volcano plot -> sizes, alpha and colours for circles
+cols <- c("nmQ" = "goldenrod3", "nmW" = "chartreuse4", "ns" = "grey")
+sizes <- c("nmW" = 2, "nmQ" = 2, "ns" = 1) 
+alphas <- c("nmW" = 1, "nmQ" = 1, "ns" = 0.5)
+
+#Volcano plot -> colors correspond to which sample the protein was found in
+ggplot(data=results, aes(x=foldchange, y=rawpvalue, fill=significant_in, size = significant_in, 
+                         alpha = significant_in, label=Name)) +  
+  geom_point(shape=21, colour="black") +
+  geom_vline(xintercept=c(-1,1),lty=4,col="black",lwd=0.8) +
+  geom_hline(yintercept = 1.1,lty=4,col="black",lwd=0.8) +
+  scale_fill_manual(values = cols) + # Modify point colour  
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  xlim(c(-8.3, 9.4)) +
+  labs(x="log2(fold change)", y="-log10 (p-value)", title="Differential protein abundance: Nestmate queens - nestmate workers")  +
+  theme_bw()+
+  theme(axis.title = element_text(size = 14), 
+        legend.position="right",
+        legend.title =  element_text(size=14),
+        legend.text = element_text(size=14),
+        axis.text=element_text(size=14)) +
+  labs(fill = "protein from ...") +
+  geom_text(aes(label=ifelse(significant_in=="nmQ",as.character(Name),'')),hjust=0,vjust=0, size=3.2) #+
+geom_text(aes(label=ifelse(significant_in=="nmW",as.character(Name),'')),hjust=0,vjust=0, size=3)
+
+
+ggsave(plot=last_plot(), device='pdf', dpi=600, filename="Comparison_nmQ-nmW_DEP_volcano.pdf")
+
+
+
+
+######################################################
+
+##   Comparison Healthy workers <-> infected workers
+
+######################################################
+
+
+setwd("C:/Users/juhartke/DATA/PROTEOMICS/Analysis/Queen_comparison/Comparison_hW_infW/")
+hWinfW <- read.delim("RelAbundance_hW-infW_anno.txt", h=T, sep="\t")
+summary(hWinfW)
+
+dimnames(hWinfW)[[1]] <- hWinfW[,1]
+hWinfW = hWinfW[,-1]
+colnames(hWinfW)
+
+t.test(hWinfW[1,2:5], hWinfW[1,6:9])
+y <- t.test(hWinfW[2,2:5], hWinfW[2,6:9])
+
+dim(hWinfW)
+ttesthWinfW<- function(df, grp1, grp2) {
+  x = df[grp1]
+  y = df[grp2]
+  x = as.numeric(x)
+  y = as.numeric(y)  
+  results = t.test(x, y)
+  results$p.value
+}
+rawpvalue = apply(hWinfW, 1, ttesthWinfW, grp1 = c(2:5), grp2 = c(6:9))
+
+hist(rawpvalue)
+
+##transform data into log2 base.
+hWinfW2 = log2(hWinfW[2:9])
+
+#calculate the mean of each gene per hemolymph sample
+hW = apply(hWinfW2[,1:4], 1, mean)
+
+#calcuate the mean of each gene per whole cestode sample
+infW = apply(hWinfW2[,5:8], 1, mean) 
+
+#confirming numeric vector
+class(hW) 
+class(infW)
+
+foldchange <- hW - infW 
+
+#Plot a histogram of the fold change values.
+hist(foldchange, xlab = "log2 Fold Change (hW vs infW)")
+
+#create results table, add rownames as gene ID, add gene names
+results = cbind(foldchange, rawpvalue)
+results = as.data.frame(results)
+results$geneID <- rownames(results)
+results$rawpvalue <- -1*log10(rawpvalue)
+results$Name <- hWinfW$Name
+
+##### prepare table for volcano plot 
+results <- results %>%  
+  mutate(significant_in = case_when(foldchange >= 1 & rawpvalue >= 1.1 ~ "hW", 
+                                    foldchange <= -1 & rawpvalue >= 1.1 ~ "infW", 
+                                    TRUE ~ "ns")) 
+results %>%
+  count(significant_in)
+write.table(results, file=paste0("Comparison_hW-infW_forVolcanoPlot_DEPanalysis.txt", sep=""), sep="\t", quote=FALSE)
+
+# set parameters for the volcano plot -> sizes, alpha and colours for circles
+cols <- c("infW" = "goldenrod3", "hW" = "chartreuse4", "ns" = "grey")
+sizes <- c("hW" = 2, "infW" = 2, "ns" = 1) 
+alphas <- c("hW" = 1, "infW" = 1, "ns" = 0.5)
+
+#Volcano plot -> colors correspond to which sample the protein was found in
+ggplot(data=results, aes(x=foldchange, y=rawpvalue, fill=significant_in, size = significant_in, 
+                         alpha = significant_in, label=Name)) +  
+  geom_point(shape=21, colour="black") +
+  geom_vline(xintercept=c(-1,1),lty=4,col="black",lwd=0.8) +
+  geom_hline(yintercept = 1.1,lty=4,col="black",lwd=0.8) +
+  scale_fill_manual(values = cols) + # Modify point colour  
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  xlim(c(-9.2, 8.7)) +
+  labs(x="log2(fold change)", y="-log10 (p-value)", title="Differential protein abundance: Infected workers - healthy workers")  +
+  theme_bw()+
+  theme(axis.title = element_text(size = 14), 
+        legend.position="right",
+        legend.title =  element_text(size=14),
+        legend.text = element_text(size=14),
+        axis.text=element_text(size=14)) +
+  labs(fill = "protein from ...") +
+  geom_text(aes(label=ifelse(significant_in=="infW",as.character(Name),'')),hjust=0,vjust=0, size=3.2) #+
+geom_text(aes(label=ifelse(significant_in=="hW",as.character(Name),'')),hjust=0,vjust=0, size=3)
+
+
+ggsave(plot=last_plot(), device='pdf', dpi=600, filename="Comparison_hW-infW_DEP_volcano.pdf")
+
+
+
+
+######################################################
+
+##   Comparison Nestmate workers <-> infected workers
+
+######################################################
+
+
+setwd("C:/Users/juhartke/DATA/PROTEOMICS/Analysis/Queen_comparison/Comparison_nmW_infW/")
+nmWinfW <- read.delim("RelAbundance_nmW-infW_anno.txt", h=T, sep="\t")
+summary(nmWinfW)
+
+dimnames(nmWinfW)[[1]] <- nmWinfW[,1]
+nmWinfW = nmWinfW[,-1]
+colnames(nmWinfW)
+
+t.test(nmWinfW[1,2:5], nmWinfW[1,6:9])
+y <- t.test(nmWinfW[2,2:5], nmWinfW[2,6:9])
+
+dim(nmWinfW)
+ttestnmWinfW<- function(df, grp1, grp2) {
+  x = df[grp1]
+  y = df[grp2]
+  x = as.numeric(x)
+  y = as.numeric(y)  
+  results = t.test(x, y)
+  results$p.value
+}
+rawpvalue = apply(nmWinfW, 1, ttestnmWinfW, grp1 = c(2:5), grp2 = c(6:9))
+
+hist(rawpvalue)
+
+##transform data into log2 base.
+nmWinfW2 = log2(nmWinfW[2:9])
+
+#calculate the mean of each gene per hemolymph sample
+nmW = apply(nmWinfW2[,1:4], 1, mean)
+
+#calcuate the mean of each gene per whole cestode sample
+infW = apply(nmWinfW2[,5:8], 1, mean) 
+
+#confirming numeric vector
+class(nmW) 
+class(infW)
+
+foldchange <- nmW - infW 
+
+#Plot a histogram of the fold change values.
+hist(foldchange, xlab = "log2 Fold Change (nmW vs infW)")
+
+#create results table, add rownames as gene ID, add gene names
+results = cbind(foldchange, rawpvalue)
+results = as.data.frame(results)
+results$geneID <- rownames(results)
+results$rawpvalue <- -1*log10(rawpvalue)
+results$Name <- nmWinfW$Name
+
+##### prepare table for volcano plot 
+results <- results %>%  
+  mutate(significant_in = case_when(foldchange >= 1 & rawpvalue >= 1.1 ~ "nmW", 
+                                    foldchange <= -1 & rawpvalue >= 1.1 ~ "infW", 
+                                    TRUE ~ "ns")) 
+results %>%
+  count(significant_in)
+write.table(results, file=paste0("Comparison_nmW-infW_forVolcanoPlot_DEPanalysis.txt", sep=""), sep="\t", quote=FALSE)
+
+# set parameters for the volcano plot -> sizes, alpha and colours for circles
+cols <- c("infW" = "goldenrod3", "nmW" = "chartreuse4", "ns" = "grey")
+sizes <- c("nmW" = 2, "infW" = 2, "ns" = 1) 
+alphas <- c("nmW" = 1, "infW" = 1, "ns" = 0.5)
+
+#Volcano plot -> colors correspond to which sample the protein was found in
+ggplot(data=results, aes(x=foldchange, y=rawpvalue, fill=significant_in, size = significant_in, 
+                         alpha = significant_in, label=Name)) +  
+  geom_point(shape=21, colour="black") +
+  geom_vline(xintercept=c(-1,1),lty=4,col="black",lwd=0.8) +
+  geom_hline(yintercept = 1.1,lty=4,col="black",lwd=0.8) +
+  scale_fill_manual(values = cols) + # Modify point colour  
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  xlim(c(-9.2, 8.7)) +
+  labs(x="log2(fold change)", y="-log10 (p-value)", title="Differential protein abundance: Infected workers - nestmate workers")  +
+  theme_bw()+
+  theme(axis.title = element_text(size = 14), 
+        legend.position="right",
+        legend.title =  element_text(size=14),
+        legend.text = element_text(size=14),
+        axis.text=element_text(size=14)) +
+  labs(fill = "protein from ...") +
+  geom_text(aes(label=ifelse(significant_in=="infW",as.character(Name),'')),hjust=0,vjust=0, size=3.2) #+
+geom_text(aes(label=ifelse(significant_in=="nmW",as.character(Name),'')),hjust=0,vjust=0, size=3)
+
+
+ggsave(plot=last_plot(), device='pdf', dpi=600, filename="Comparison_nmW-infW_DEP_volcano.pdf")
+
+
+################################################################################################
+#################   GO Enrichment of Proteins that are unique in queens and   ##################
+#################       infected workers compared to healthy workers          ##################
+################################################################################################
+
+# Load
+library("tagcloud")
+library("RColorBrewer")
+library(Rgraphviz)
+library(topGO)
+library(ggplot2)
+library(digest)
+library(tidyverse)
+
+
+### with old universe (whole T.nyl transcriptome)
+
+setwd("D:/WORK/POSTDOC_JGU/PROTEOMICS/Analysis/Data_Alejandro_new/new_GO_enriched_Ant")
+
+#### Read background file for T. nylanderi (Interproscan run on complete Transcriptome)
+universe <- readMappings("TNYL_filtered_ONLYTNYL_transcripts_GO_Terms.editforTopGO.tsv") # "adjust the filename you want to use as background.
+# generate a simple list of the GENE IDs
+universe_genelist <- names(universe)
+
+
+setwd("C:/Users/juhartke/DATA/PROTEOMICS/Analysis/Queen_comparison/QueenOnly_infWOnly/")
+filename1 = "Overlap_hQ-infWhW.txt" # adjust the filename you want to analyze
+enrichment1 <- readLines(filename1)
+
+gene_list1 <- factor(as.integer(universe_genelist %in% enrichment1))
+names(gene_list1) <- universe_genelist
+ontology_type = "BP" # or CC or MF
+GO_data1 <- new("topGOdata", description="GO_Enrichment", ontology=ontology_type, allGenes=gene_list1, annot = annFUN.gene2GO, gene2GO=universe)
+numSigGenes(GO_data1)
+sig_genes1 <- sigGenes(GO_data1)
+result_topGO1 <- runTest(GO_data1, algorithm = "weight01", statistic = "fisher")
+result_table1 <- GenTable(GO_data1, Fisher = result_topGO1, orderBy = "Fisher", ranksOf = "Fisher", topNodes = numSigGenes(GO_data1))
+write.table(result_table1, file=paste0("topGO_result_", filename1, "_", ontology_type, ".txt", sep=""), sep="\t", quote=FALSE)
+write.table(sig_genes1, file=paste0("topGO_result_", filename1, "_", ontology_type, "GeneIDs.txt", sep=""), sep="\t", quote=FALSE)
+
+#Wordcloud
+sig_enr_inf<-result_table1[which(result_table1$Fisher<0.05),]
+sig_enr_inf_u <- sig_enr_inf %>% distinct(GO.ID, .keep_all = TRUE)
+colors <- colorRampPalette( brewer.pal( 12, "Paired" ) )( length(sig_enr_inf_u$Term))
+tagcloud(strmultline(sig_enr_inf_u$Term), weights = -log(as.numeric(sig_enr_inf_u$Fisher)),col=colors)
+
+
+
+### with new universe (whole T.nyl proteome = queen and worker proteome)
+
+setwd("C:/Users/juhartke/DATA/PROTEOMICS/")
+
+#### Read background file for T. nylanderi (Interproscan run on complete Transcriptome)
+universe2 <- readMappings("NewUniverse_AntProteome_WQ.tsv") # "adjust the filename you want to use as background.
+# generate a simple list of the GENE IDs
+universe_genelist2 <- names(universe2)
+
+
+setwd("C:/Users/juhartke/DATA/PROTEOMICS/Analysis/Queen_comparison/QueenOnly_infWOnly/")
+filename2 = "Overlap_hQ-infWhW.txt" # adjust the filename you want to analyze
+enrichment2 <- readLines(filename2)
+
+gene_list2 <- factor(as.integer(universe_genelist %in% enrichment2))
+names(gene_list2) <- universe_genelist2
+ontology_type = "BP" # or CC or MF
+GO_data2 <- new("topGOdata", description="GO_Enrichment", ontology=ontology_type, allGenes=gene_list2, annot = annFUN.gene2GO, gene2GO=universe2)
+numSigGenes(GO_data2)
+sig_genes2 <- sigGenes(GO_data2)
+result_topGO2 <- runTest(GO_data2, algorithm = "weight01", statistic = "fisher")
+result_table2 <- GenTable(GO_data2, Fisher = result_topGO2, orderBy = "Fisher", ranksOf = "Fisher", topNodes = numSigGenes(GO_data2))
+write.table(result_table2, file=paste0("topGO_result_", filename2, "_", ontology_type, ".txt", sep=""), sep="\t", quote=FALSE)
+write.table(sig_genes2, file=paste0("topGO_result_", filename2, "_", ontology_type, "GeneIDs.txt", sep=""), sep="\t", quote=FALSE)
+
+#Wordcloud
+sig_enr_QinfW<-result_table2[which(result_table2$Fisher<0.05),]
+sig_enr_QinfW_u <- sig_enr_QinfW %>% distinct(GO.ID, .keep_all = TRUE)
+colors <- colorRampPalette( brewer.pal( 12, "Paired" ) )( length(sig_enr_QinfW_u$Term))
+tagcloud(strmultline(sig_enr_QinfW_u$Term), weights = -log(as.numeric(sig_enr_QinfW_u$Fisher)),col=colors)
+
+
+
+
+
