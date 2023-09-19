@@ -1,0 +1,181 @@
+library(ggplot2)
+library(tidyr)
+
+ces <- read.table("CestodeProteins_rel_hemo_whole_Name.txt", h=T, sep="\t")
+
+dimnames(ces)[[1]] <- ces[,1]
+ces = ces[,-1]
+colnames(ces)
+
+t.test(ces[1,2:5], ces[1,6:8])
+y <- t.test(ces[2,2:5], ces[2,6:8])
+
+dim(ces)
+ttestces <- function(df, grp1, grp2) {
+  x = df[grp1]
+  y = df[grp2]
+  x = as.numeric(x)
+  y = as.numeric(y)  
+  results = t.test(x, y)
+  results$p.value
+}
+rawpvalue = apply(ces, 1, ttestces, grp1 = c(2:5), grp2 = c(6:8))
+
+hist(rawpvalue)
+
+##transform data into log2 base.
+ces2 = log2(ces[2:8])
+
+#calculate the mean of each gene per hemolymph sample
+hemo = apply(ces2[,1:4], 1, mean)
+
+#calcuate the mean of each gene per whole cestode sample
+whole = apply(ces2[,5:7], 1, mean) 
+
+#confirming numeric vector
+class(hemo) 
+class(whole)
+
+foldchange <- whole - hemo 
+
+#Plot a histogram of the fold change values.
+hist(foldchange, xlab = "log2 Fold Change (whole vs hemo)")
+
+#create results table, add rownames as gene ID, add gene names
+results = cbind(foldchange, rawpvalue)
+results = as.data.frame(results)
+results$geneID <- rownames(results)
+results$rawpvalue <- -1*log10(rawpvalue)
+results$Name <- ces$Name
+
+##### prepare table for volcano plot 
+results <- results %>%  
+  mutate(gene_type = case_when(foldchange >= 1 & rawpvalue >= 1.1 ~ "whole", 
+                               foldchange <= -1 & rawpvalue >= 1.1 ~ "hemolymph", 
+                               TRUE ~ "ns")) 
+results %>%
+  count(gene_type)
+write.table(results, file=paste0("CestodeProteins_DEPanalysis.txt", sep=""), sep="\t", quote=FALSE)
+
+# set parameters for the volcano plot -> sizes, alpha and colours for circles
+cols <- c("hemolymph" = "goldenrod3", "whole" = "chartreuse4", "ns" = "grey")
+sizes <- c("whole" = 2, "hemolymph" = 2, "ns" = 1) 
+alphas <- c("whole" = 1, "hemolymph" = 1, "ns" = 0.5)
+
+#Volcano plot -> colors correspond to which sample the protein was found in
+ggplot(data=results, aes(x=foldchange, y=rawpvalue, fill=gene_type, size = gene_type, 
+                         alpha = gene_type, label=Name)) +  
+  geom_point(shape=21, colour="black") +
+  geom_vline(xintercept=c(-1,1),lty=4,col="black",lwd=0.8) +
+  geom_hline(yintercept = 1.1,lty=4,col="black",lwd=0.8) +
+  scale_fill_manual(values = cols) + # Modify point colour  
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  xlim(c(-6, 6)) +
+  labs(x="log2(fold change)", y="-log10 (adj.p-value)", title="Differential expression")  +
+  theme_bw()+
+  theme(axis.title = element_text(size = 14), 
+        legend.position="right",
+        legend.title =  element_text(size=14),
+        legend.text = element_text(size=14),
+        axis.text=element_text(size=14)) +
+  labs(fill = "protein from ...") +
+  geom_text(aes(label=ifelse(gene_type=="hemolymph",as.character(Name),'')),hjust=0,vjust=0, size=3)
+
+ggsave(plot=last_plot(), device='png', dpi=600, filename="CestodeProteins_whole_hemo_DEP_volcano.png")
+
+
+
+####################
+
+library(stringr)
+library(ggplot2)
+library(ggpubr)
+library(gridExtra)
+options(digits=3)
+
+
+longevity_terms <- c("aging", "senescence", "lifespan", "repair", "piwi", "JNK", "apopto", "autophagy", 
+                     "cell death", "oxidative", "redox", "TOR", "Toll", "toll", "UV damage")
+
+transport<-c("transport", "vesicle", "transmembrane", "export", "secretion", "excretion")
+
+immunity_terms <- c("immune", "toll", "infection", "virus")
+
+gene_regulation <- c("transcription factor", "methylation", "histone")
+
+result<-data.frame("Group"=c("Cistercercoid", "Cistercercoid", "Cistercercoid", "Cistercercoid", "Ant haemolymph", "Ant haemolymph", "Ant haemolymph", "Ant haemolymph"), 
+                   "Process"=c("Longevity", "Transport", "Immunity", "Epigenetic", "Longevity", "Transport", "Immunity","Epigenetic"), 
+                   "Upregulated"=c(NA), 
+                   "Percentage"=c(NA))
+
+
+result
+
+###UPREGULATED
+#add results for whole cestode samples
+table_whole<-read.table("S3_Cestodewhole_in2replicates_annotated_BLASTresults.txt", sep="\t", header=T, quote="")
+table_whole_conf<-table_whole
+table_whole_func<-paste(table_whole_conf$UniProtCelegans_GO_BP,table_whole_conf$UniProtCelegans_GO_MF,
+                        table_whole_conf$UniProtCelegans_Function, table_whole_conf$search_query, sep=";")
+result$Upregulated[1]<-length(str_which(table_whole_func, paste(longevity_terms, collapse='|')))
+result$Upregulated[2]<-length(str_which(table_whole_func, paste(transport, collapse='|')))
+result$Upregulated[3]<-length(str_which(table_whole_func, paste(immunity_terms, collapse='|')))
+result$Upregulated[4]<-length(str_which(table_whole_func, paste(gene_regulation, collapse='|')))
+
+protein_num <- nrow(table_whole)
+protein_NA <- sum(is.na(table_whole$UniProtCelegans_GO_BP))
+protein_anno <- protein_num - protein_NA
+
+result$Percentage[1]<-(length(str_which(table_whole_func, paste(longevity_terms, collapse='|')))/protein_anno*100)
+result$Percentage[2]<-(length(str_which(table_whole_func, paste(transport, collapse='|')))/protein_anno*100)
+result$Percentage[3]<-(length(str_which(table_whole_func, paste(immunity_terms, collapse='|')))/protein_anno*100)
+result$Percentage[4]<-(length(str_which(table_whole_func, paste(gene_regulation, collapse='|')))/protein_anno*100)
+
+
+#add results for hemolymph cestode samples
+table_hemo<-read.table("F36_ICinf_in2replicates.annotated_BLASTresults.txt", sep="\t", header=T, quote="")
+table_hemo_conf<-table_hemo
+table_hemo_func<-paste(table_hemo_conf$UniProtCelegans_GO_BP,table_hemo_conf$UniProtCelegans_GO_MF ,
+                       table_hemo_conf$UniProtCelegans_Function,table_hemo_conf$search_query, sep=";")
+result$Upregulated[5]<-length(str_which(table_hemo_func, paste(longevity_terms, collapse='|')))
+result$Upregulated[6]<-length(str_which(table_hemo_func, paste(transport, collapse='|')))
+result$Upregulated[7]<-length(str_which(table_hemo_func, paste(immunity_terms, collapse='|')))
+result$Upregulated[8]<-length(str_which(table_hemo_func, paste(gene_regulation, collapse='|')))
+
+protein_num_hemo <- nrow(table_hemo)
+protein_NA_hemo <- sum(is.na(table_hemo$UniProtCelegans_GO_BP))
+protein_anno_hemo <- protein_num_hemo - protein_NA_hemo
+
+result$Percentage[5]<-(length(str_which(table_hemo_func, paste(longevity_terms, collapse='|')))/protein_anno_hemo*100)
+result$Percentage[6]<-(length(str_which(table_hemo_func, paste(transport, collapse='|')))/protein_anno_hemo*100)
+result$Percentage[7]<-(length(str_which(table_hemo_func, paste(immunity_terms, collapse='|')))/protein_anno_hemo*100)
+result$Percentage[8]<-(length(str_which(table_hemo_func, paste(gene_regulation, collapse='|')))/protein_anno_hemo*100)
+
+
+#results table
+result
+
+
+### bar graph
+
+library("ggplot2")
+
+ggplot(result, aes(x=Process, fill=Group)) + 
+  geom_bar(aes(y = Percentage, fill = Group), stat = "identity", position = "dodge", color="black") +
+  #geom_bar(aes(y = -Downregulated, fill = Group), stat = "identity", position = "dodge", color="black") +
+  #geom_hline(yintercept = 0,colour = "black") +
+  scale_fill_manual(values = c("seagreen4", "steelblue3")) +
+  #scale_y_continuous(breaks=c(1,2,3,4,5,6,7,8)) +
+  theme_classic()
+
+
+## number of annotated genes -> whole vs. hemo
+
+perc_anno <- data.frame("dataset"=c("Whole", "hemo"), "Percentage_annotated"=c(NA))
+perc_anno$Percentage_annotated[1] <- protein_NA/protein_num*100
+perc_anno$Percentage_annotated[2] <- protein_NA_hemo/protein_num_hemo*100
+
+
+ggplot(perc_anno, aes(x=dataset)) + 
+  geom_bar(aes(y = Percentage_annotated), stat = "identity", position = "dodge", color="black") 
